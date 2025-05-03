@@ -12,6 +12,8 @@ import re
 import glob
 import json
 import datetime
+from agno.tools.website import WebsiteTools
+from prompts import *
 
 ## Improve tools 
 ## Embed my vault at first? how would that update?
@@ -22,13 +24,14 @@ import datetime
 ## Note(name,tags,reference, content, etc..)
 ## Save insights or memories to better query the vault
 ## periodic pull and push to and from obsidian
-
+## add datetime to prompt
+## add periodic git push to obsidian (commit push)
 
 # === Load API Key from .env ===
 load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
 
-g_vault_path = ""
+g_vault_path = os.getenv("VAULT_PATH")
 daily_path = os.path.join(g_vault_path, "Daily")
 
 def create_note(note_name: str, content: str) -> str:
@@ -151,14 +154,13 @@ def read_note(note_name: str) -> str:
     The note filename is expected to be in the format '{note_name}.md'.
 
     Args:
-        note_name (str): The name of the note to read (without the .md extension).
+        note_name (str): The name of the note to read (with the .md extension).
 
     Returns:
         str: A JSON-formatted string containing the note file name and its content
               or an error message if the note does not exist.
     """
     path = os.path.join(g_vault_path, f"{note_name}")
-    print(path)
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             note_content = f.read()
@@ -166,7 +168,7 @@ def read_note(note_name: str) -> str:
                 "file_name": f"{note_name}",
                 "content": note_content
             }
-            return json.dumps(result)
+            return json.dumps(result, ensure_ascii=False)
 
     return json.dumps({"error": f"Note '{note_name}' not found."}, ensure_ascii=False)
 
@@ -220,6 +222,41 @@ def get_recently_modified_notes(days: int = 7) -> str:
     except Exception as e:
         return json.dumps({"error": str(e)}, ensure_ascii=False)  # Handle any exceptions that occur
 
+# tool: move file to (goals)
+
+# === Set up Memory V2 ===
+memory_db_path = os.path.join(g_vault_path, ".ai-memory.db")
+memory_db = SqliteMemoryDb(table_name="memory", db_file=memory_db_path)
+memory = Memory(db=memory_db)
+
+# === Initialize Agent ===
+agent = Agent(
+    model=OpenAIChat(id="gpt-4.1", api_key=API_KEY),
+    memory=memory,
+    storage=SqliteAgentStorage(table_name="agent_sessions", db_file="agent_storage.db"),
+    add_history_to_messages=True,  # Adds recent chat history when generating a reply
+    num_history_responses=3,
+    tools=[
+        # WebsiteTools(),
+        get_daily_note,
+        search_by_tag,
+        # search_content,
+        search_note_file,
+        append_to_note,
+        list_directory,
+        get_recently_modified_notes,
+        read_note,
+        create_note
+    ],
+    markdown=True,
+    name="obsidian-cli-agent",
+    role="Smart Personal Knowledge Assistant for Obsidian",
+    debug_mode=True,
+    show_tool_calls=True,
+    description = ObsidianAgent.description,
+    instructions = ObsidianAgent.instructions
+)
+
 # === CLI Entrypoint ===
 def main():
     parser = argparse.ArgumentParser(description="Query your Obsidian vault using AI")
@@ -228,64 +265,17 @@ def main():
     parser.add_argument("--search", type=str, help="Raw search: content, tag:#tagname, or file:<title>")
     args = parser.parse_args()
 
-    vault_path = os.path.expanduser(args.vault)
+    global g_vault_path
+
+    if args.vault:
+        g_vault_path = args.vault
+    
+    vault_path = os.path.expanduser(g_vault_path)
+
     if not os.path.isdir(vault_path):
         print(f"❌ Vault path '{vault_path}' does not exist.")
         return
-
-    global g_vault_path    
-    g_vault_path = vault_path
-
-    # === Set up Memory V2 ===
-    memory_db_path = os.path.join(vault_path, ".ai-memory.db")
-    memory_db = SqliteMemoryDb(table_name="memory", db_file=memory_db_path)
-    memory = Memory(db=memory_db)
-
-    # === Initialize Agent ===
-    agent = Agent(
-        model=OpenAIChat(id="gpt-4.1", api_key=API_KEY),
-        memory=memory,
-        storage=SqliteAgentStorage(table_name="agent_sessions", db_file="agent_storage.db"),
-        add_history_to_messages=True,  # Adds recent chat history when generating a reply
-        num_history_responses=3,   
-        tools=[
-            get_daily_note,
-            search_by_tag,
-            # search_content,
-            search_note_file,
-            append_to_note,
-            list_directory,
-            get_recently_modified_notes,
-            read_note,
-            create_note
-        ],
-        markdown=True,
-        name="obsidian-cli-agent",
-        role="Smart Personal Knowledge Assistant for Obsidian",
-        debug_mode=True,
-        show_tool_calls=True,
-        description=(
-            """
-            A context-aware agent that manages and evolves an Obsidian vault structured with Zettelkasten
-            principles. The vault includes journals, evolving knowledge, long-term efforts, and high-level
-            maps of content. The agent receives input via messaging (e.g., WhatsApp) and integrates it into
-            the vault using proper templates, structure, and links.
-            """
-        ),
-        instructions = [
-            "You are a structured, smart agent. Always reason about the type of content you receive. Classify it as one of the following: Journal entry, New concept/idea, Link/reference, Effort/goal, or System/structure update.",
-            "For Journal entries: Use 'get_daily_note' and 'append_to_note'. Insert the entry under a time-stamped heading. Always apply the daily note template from 'Extras/Templates'.",
-            "For new concepts, media summaries, or ideas: Store in 'Encounters/'. Check for existing related notes using 'search_note_file'. Create a new note only if necessary. Use the correct template from 'Extras/Templates'.",
-            "For goals or long-term efforts: Store in 'Efforts/'. Determine the correct subfolder ('Ongoing', 'Simmering', 'On', or 'Sleeping') based on the content. Apply a structured effort template. Link related concepts using [[wikilinks]].",
-            "Always use the appropriate template before creating a note. Never create notes without formatting. Look in 'Extras/Templates' before calling 'create_note'.",
-            "Maintain Markdown [[wikilinks]] throughout. When referencing concepts, goals, or ideas, ensure they link to the appropriate note. Avoid dead ends or orphaned notes.",
-            "Mention any new notes in the corresponding Daily Note. Use 'append_to_note' to log their creation contextually. This reinforces traceability and reflection.",
-            "Support smart queries from the user like: 'Summarize this week's notes', 'Find all recent mentions of [[AI Ethics]]', 'Suggest ideas related to X', or 'List active efforts in Simmering'. Use 'search_note_file', 'read_note', and 'get_recently_modified_notes' to construct answers.",
-            "Follow the Zettelkasten method: each note should represent one idea. Keep notes atomic and evolving. When in doubt, split a note.",
-            "If a command or input is unclear, reflect briefly in your reasoning and choose the safest, least destructive action (e.g., log to Encounters with a 'Needs review' tag)."
-        ]
-    )
-
+    
     # === Run Agent ===
     if args.query:
         # result = agent.print_response(args.query)
@@ -300,7 +290,7 @@ def main():
         else:
             result = agent.run(f"Search inside notes for '{args.search}'")
     else:
-        result = "Please provide --query or --search."
+        result = "Please provide --query, --search"
 
     print("\n🤖 Agent Response:\n")
     print(result)
