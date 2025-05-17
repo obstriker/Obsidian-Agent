@@ -14,6 +14,9 @@ import json
 import datetime
 from agno.tools.website import WebsiteTools
 from prompts import *
+# from watchdog.vault_watcher import start_vault_sync_thread, init_knowledge_base
+from vault_embedder import start_vault_sync_thread, init_knowledge_base
+from watchdog.vault_watcher import *
 
 ## Improve tools 
 ## Embed my vault at first? how would that update?
@@ -32,7 +35,7 @@ load_dotenv()
 API_KEY = os.getenv("OPENAI_API_KEY")
 
 g_vault_path = os.getenv("VAULT_PATH")
-daily_path = os.path.join(g_vault_path, "Daily")
+DAILY_PATH = "Journal/"
 
 def create_note(note_name: str, content: str) -> str:
     """
@@ -57,11 +60,33 @@ def create_note(note_name: str, content: str) -> str:
     except Exception as e:
         return f"Error creating note '{note_name}': {str(e)}"
 
+def get_daily_note() -> str:
+    """
+    Returns today's daily note if it exists, formatted as JSON.
+    The filename format is expected to be 'YYYY-MM-DD-Day.md'.
+    """
+    global DAILY_PATH
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    note_filename = f"{today}-{date.today().strftime('%A')}.md"  # Format: YYYY-MM-DD-Day.md
+    path = os.path.join(DAILY_PATH, note_filename)
+    full_path = os.path.join(g_vault_path, path)
+
+    if os.path.exists(full_path):
+        with open(full_path, "r", encoding="utf-8") as f:
+            note_content = f.read()
+            result = {
+                "file_name": path,
+                "content": note_content
+            }
+            return json.dumps(result, ensure_ascii=False)
+    return json.dumps({"result": f"No daily note found for {note_filename}."}, ensure_ascii=False)
+
 def append_to_note(note_name: str, content: str, marker: str = "<!-- AI -->") -> str:
     """
     Appends content to a note, or inserts at marker if exists.
     """
-    path = os.path.join(g_vault_path, f"{note_name}.md")
+    path = os.path.join(g_vault_path, f"{note_name}")
+
     if not os.path.exists(path):
         return f"Note '{note_name}' not found."
     with open(path, "r+", encoding="utf-8") as f:
@@ -73,7 +98,7 @@ def append_to_note(note_name: str, content: str, marker: str = "<!-- AI -->") ->
         f.seek(0)
         f.write(text)
         f.truncate()
-    return f"Appended to {note_name}.md."
+    return f"Appended to {note_name}."
 
 def search_note_file(query: str) -> str:
     """
@@ -172,25 +197,6 @@ def read_note(note_name: str) -> str:
 
     return json.dumps({"error": f"Note '{note_name}' not found."}, ensure_ascii=False)
 
-def get_daily_note() -> str:
-    """
-    Returns today's daily note if it exists, formatted as JSON.
-    The filename format is expected to be 'YYYY-MM-DD-Day.md'.
-    """
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    note_filename = f"{today}-{date.today().strftime('%A')}.md"  # Format: YYYY-MM-DD-Day.md
-    path = os.path.join(daily_path, "Journal/" + note_filename)
-
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            note_content = f.read()
-            result = {
-                "file_name": path + "/" + note_filename,
-                "content": note_content
-            }
-            return json.dumps(result)
-    return json.dumps({"result": f"No daily note found for {note_filename}."}, ensure_ascii=False)
-
 def create_daily_note():
     pass
 
@@ -223,11 +229,21 @@ def get_recently_modified_notes(days: int = 7) -> str:
         return json.dumps({"error": str(e)}, ensure_ascii=False)  # Handle any exceptions that occur
 
 # tool: move file to (goals)
+# tool: get_all_tags - used for search, overview of topic
+# improve searching in the vault - especially cross languages
 
 # === Set up Memory V2 ===
 memory_db_path = os.path.join(g_vault_path, ".ai-memory.db")
 memory_db = SqliteMemoryDb(table_name="memory", db_file=memory_db_path)
 memory = Memory(db=memory_db)
+
+# vector_db = LanceDb(
+# uri="my_vault/tmp/lancedb",
+# table_name="vault_docs",
+# search_type=SearchType.hybrid,
+# embedder=OpenAIEmbedder()
+# )
+
 
 # === Initialize Agent ===
 agent = Agent(
@@ -275,9 +291,15 @@ def main():
     if not os.path.isdir(vault_path):
         print(f"❌ Vault path '{vault_path}' does not exist.")
         return
-    
+
     # === Run Agent ===
     if args.query:
+        # kb = init_knowledge_base(vault_path)
+        # start_vault_sync_thread(vault_path, interval=5)
+        vault = VaultEmbedder(args.vault)
+        vault.sync()
+        vault.start_monitoring(interval=5)
+        agent.knowledge = vault.kb
         # result = agent.print_response(args.query)
         agent.cli_app()
     elif args.search:

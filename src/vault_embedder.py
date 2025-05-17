@@ -1,148 +1,136 @@
 """
 Vault Embedder for Obsidian Assistant
 
-Embeds documents from an Obsidian vault into Agno + LanceDB.
-Supports incremental updates and monitoring mode.
+Embeds documents from an Obsidian vault using a pluggable vector DB.
+Supports initial sync, incremental updates, and monitoring mode.
 """
 
-import os, glob, time, argparse
-from typing import List, Optional
-from dotenv import load_dotenv
+import os
+import glob
+import time
+import hashlib
 import json
+import threading
+from typing import List, Optional, Tuple
 
 from agno.document import Document
+from agno.knowledge.document import DocumentKnowledgeBase
 from agno.embedder.openai import OpenAIEmbedder
 from agno.vectordb.lancedb import LanceDb, SearchType
-from agno.knowledge.document import DocumentKnowledgeBase
 
-load_dotenv()
-API_KEY = os.getenv("OPENAI_API_KEY")
+INDEX_FILENAME = ".vault_index.json"
 
-def get_markdown_files(path: str) -> List[str]:
-    return glob.glob(os.path.join(path, "**/*.md"), recursive=True)
+class VaultEmbedder:
+    def __init__(self, vault_path: str, vector_db = None, recreate: bool = False):
+        self.vault_path = os.path.abspath(vault_path)
+        self.db_path = os.path.join(vault_path, ".assistant")
+        self.db_path = os.path.join(self.db_path, "lancedb")
+        self.index = self._load_index()
 
-def build_documents(path: str) -> List[Document]:
-    abs_path = os.path.abspath(path)
-    documents = []
-    for file_path in get_markdown_files(abs_path):
-        try:
-            with open(file_path, encoding="utf-8") as f:
-                content = f.read()
-            rel_path = os.path.relpath(file_path, abs_path)
-            documents.append(
-                Document(
-                    name=rel_path,
-                    content=content,
-                    meta_data={"file_path": rel_path, "timestamp": time.time()}
+        if not vector_db:
+            self.vector_db = LanceDb(
+                uri=self.db_path,
+                table_name="vault_docs",
+                search_type=SearchType.hybrid,
+                embedder=OpenAIEmbedder()
                 )
-            )
-        except Exception as e:
-            print(f"⚠️ Error reading {file_path}: {e}")
-    return documents
 
-import json
+        self.kb = DocumentKnowledgeBase(documents=[], vector_db=self.vector_db, skip_existing=True)
+        self.kb.load(recreate=recreate)
+        self._initial_sync(recreate=recreate)
 
-def load_index(path): 
-    try: return json.load(open(os.path.join(path, ".vault_index.json")))
-    except: return {}
+    # ----------------- Internal Utilities -----------------
 
-def save_index(path, index): 
-    json.dump(index, open(os.path.join(path, ".vault_index.json"), "w"), indent=2)
+    def _get_markdown_files(self) -> List[str]:
+        return glob.glob(os.path.join(self.vault_path, "**/*.md"), recursive=True)
 
-def get_modified_docs(path, index): 
-    docs, base = [], os.path.abspath(path)
-    for fp in get_markdown_files(base):
-        rel = os.path.relpath(fp, base)
-        mtime = os.path.getmtime(fp)
-        if rel not in index or mtime > index[rel]:
+    def _compute_md5(self, text: str) -> str:
+        return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+    def _load_index(self) -> dict:
+        path = os.path.join(self.db_path, INDEX_FILENAME)
+        if os.path.exists(path):
+            with open(path) as f:
+                return json.load(f)
+        return {}
+
+    def _save_index(self):
+        path = os.path.join(self.db_path, INDEX_FILENAME)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(self.index, f, indent=2)
+
+    def _get_modified_documents(self) -> List[Tuple[Document, Optional[str]]]:
+        docs = []
+        for file_path in self._get_markdown_files():
+            rel_path = os.path.relpath(file_path, self.vault_path)
             try:
-                content = open(fp, encoding="utf-8").read()
-                docs.append(Document(
-                    id=rel,  # Ensures uniqueness across versions
-                    name=rel,
-                    content=content,
-                    meta_data={"file_path": rel, "timestamp": time.time()}
-                ))
-                index[rel] = mtime
+                with open(file_path, encoding="utf-8") as f:
+                    content = f.read().replace("\x00", "\ufffd")
+                doc_hash = self._compute_md5(content)
+                prev_hash = self.index.get(rel_path)
+                if prev_hash != doc_hash:
+                    docs.append((
+                        Document(
+                            id=doc_hash,
+                            name=rel_path,
+                            content=content,
+                            meta_data={"file_path": rel_path, "timestamp": time.time()}
+                        ),
+                        prev_hash
+                    ))
             except Exception as e:
-                print(f"⚠️ {rel}: {e}")
-    return docs
+                print(f"⚠️ Error reading {rel_path}: {e}")
+        return docs
 
-def embed_vault(path: str, vector_db: Optional[LanceDb] = None, recreate: bool = False) -> DocumentKnowledgeBase:
-    abs_path = os.path.abspath(path)
-    db_path = os.path.join(abs_path, "tmp/lancedb")
+    # ----------------- Core Methods -----------------
 
-    if not vector_db:
-        vector_db = LanceDb(
-            uri=db_path,
-            table_name="vault_docs",
-            search_type=SearchType.hybrid,
-            embedder=OpenAIEmbedder()
-        )
+    def sync(self):
+        updates = self._get_modified_documents()
 
-    documents = build_documents(abs_path)
-    print(f"📄 Found {len(documents)} markdown files.")
+        if not updates:
+            print("✅ Vault is already in sync.")
+            return
 
-    kb = DocumentKnowledgeBase(
-        documents=documents,
-        vector_db=vector_db,
-        skip_existing=True
-    )
-    kb.load(recreate=recreate)
-    return kb
+        print(f"🔁 Syncing {len(updates)} new or updated files...")
+        for doc, old_id in updates:
+            if old_id and old_id != doc.id:
+                self.vector_db.table.delete(f"id = '{old_id}'")
+            self.kb.load_documents([doc])
+            self.index[doc.name] = doc.id
 
-def add_document(document: Document, kb: DocumentKnowledgeBase):
-    """Upsert a single document: delete existing by ID, then insert."""
-    if not document.id:
-        raise ValueError("Document must have an 'id' field for upsert behavior.")
-    
-    # kb.vector_db.delete(ids=[document.id])  # Manual upsert: delete first
-    kb.load_documents([document])
-    print(f"🔁 Upserted: {document.name}")
+        self._save_index()
+        print("✅ Sync complete.")
 
+    def _initial_sync(self, recreate: bool):
+        if recreate or not self.index:
+            print("📭 No index or recreate=True — syncing full vault.")
+            self.index = {}
+        self.sync()
 
-def monitor_vault(path: str, interval: int = 300):
-    abs_path = os.path.abspath(path)
-    db = LanceDb(
-        uri=os.path.join(abs_path, "tmp/lancedb"),
-        table_name="vault_docs",
-        search_type=SearchType.hybrid,
-        embedder=OpenAIEmbedder()
-    )
-    kb = DocumentKnowledgeBase(documents=[], vector_db=db, skip_existing=True)
-    index = load_index(abs_path)
+    def query(self, query: str, top_k: int = 5):
+        results = self.kb.query(query=query, top_k=top_k)
+        return [
+            (
+                r.document.name,
+                round(r.score, 4),
+                r.document.content[:300].replace("\n", " ") + "..." if len(r.document.content) > 300 else r.document.content
+            )
+            for r in results
+        ]
 
-    try:
-        while True:
-            print(f"\n🔄 Scanning vault: {abs_path}")
-            docs = get_modified_docs(abs_path, index)
+    def search_knowledge(self, query: str, top_k: int = 5):
+        """Agno-style alias."""
+        return self.query(query, top_k)
 
-            if docs:
-                for doc in docs:
-                    add_document(doc, kb)  # uses delete + insert for upsert
-                save_index(abs_path, index)
-                print(f"🔁 Upserted {len(docs)} modified docs")
-            else:
-                print("🟢 No changes detected")
+    def start_monitoring(self, interval: int = 300) -> threading.Thread:
+        def loop():
+            while True:
+                print(f"\n🔄 Scanning vault: {self.vault_path}")
+                self.sync()
+                print(f"⏳ Sleeping for {interval} seconds...")
+                time.sleep(interval)
 
-            print(f"⏳ Sleeping {interval}s...")
-            time.sleep(interval)
-    except KeyboardInterrupt:
-        print("🛑 Monitoring stopped.")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Embed Obsidian vault with Agno + LanceDB")
-    parser.add_argument("--vault", required=True, help="Path to Obsidian vault")
-    parser.add_argument("--monitor", action="store_true", help="Enable monitoring mode")
-    parser.add_argument("--interval", type=int, default=300, help="Monitoring interval (seconds)")
-    parser.add_argument("--recreate", action="store_true", help="Recreate vector DB")
-    args = parser.parse_args()
-
-    vault = os.path.expanduser(args.vault)
-    if not os.path.isdir(vault):
-        print(f"❌ Invalid vault path: {vault}")
-    else:
-        kb = embed_vault(vault, recreate=args.recreate)
-        print("✅ Vault embedded successfully.")
-        if args.monitor:
-            monitor_vault(vault, args.interval)
+        thread = threading.Thread(target=loop, daemon=True)
+        thread.start()
+        return thread
