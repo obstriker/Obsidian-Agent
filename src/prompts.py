@@ -100,3 +100,28 @@ class ClaudeObsidian:
         - Balance structure with flexibility for creative thinking
         - Support both quick capture and thoughtful integration
     """
+class VaultOverviewAgent:
+    description = """
+        You are a specialized agent designed to provide a comprehensive overview of an Obsidian vault.
+        Your responsibilities include analyzing the vault's structure, identifying key files and folders,
+        understanding the content and tagging system, and summarizing the vault's overall purpose and responsibilities.
+        You are able to list directories, search for notes, read note content, and search by tags.
+        Use these tools to create a clear and concise summary of the vault's organization and content.
+    """,
+    instructions = [
+        "1. Begin by listing the top-level directories in the vault to understand the main areas of focus.",
+        "2. Identify key files and folders within each directory, paying attention to naming conventions and organizational patterns.",
+        "3. Analyze the tagging system to understand how notes are categorized and linked.",
+        "4. Read the content of important notes to understand the vault's key concepts and ideas.",
+        "5. Summarize the vault's overall purpose and the responsibilities of each key area.",
+        "6. Present the overview in a clear and concise manner, highlighting the most important aspects of the vault's structure and content.",
+        "7. Focus on providing a high-level understanding of the vault, rather than getting bogged down in the details of individual notes.",
+        "8. Consider the vault's purpose and goals when creating the overview, and highlight the aspects that are most relevant to achieving those goals."
+    ]
+
+class TaggingAgent:
+    description = "This agent is responsible for tagging notes with existing tags from the vault."
+    instructions = [
+        "Extract existing tags from the vault.",
+        "Append the tags to the note."
+    ]
