@@ -17,8 +17,8 @@ from tools import note_utils, tag_utils
 from prompts import *
 from workflows.obsidian_workflow import ObsidianWorkflow
 # from watchdog.vault_watcher import start_vault_sync_thread, init_knowledge_base
-from vault_embedder import start_vault_sync_thread, init_knowledge_base
-from watchdog.vault_watcher import *
+from vault_embedder import *
+# from watchdog.vault_watcher import *
 
 ## Improve tools 
 ## Embed my vault at first? how would that update?
@@ -44,9 +44,9 @@ load_dotenv()
 # improve searching in the vault - especially cross languages
 
 # === Set up Memory V2 ===
-memory_db_path = os.path.join(g_vault_path, ".ai-memory.db")
-memory_db = SqliteMemoryDb(table_name="memory", db_file=memory_db_path)
-memory = Memory(db=memory_db)
+# memory_db_path = os.path.join(g_vault_path, ".ai-memory.db")
+# memory_db = SqliteMemoryDb(table_name="memory", db_file=memory_db_path)
+# memory = Memory(db=memory_db)
 
 # vector_db = LanceDb(
 # uri="my_vault/tmp/lancedb",
@@ -89,11 +89,11 @@ def main():
     # === Run Agent ===
     if args.query:
         # result = agent.print_response(args.query)
-        vault = VaultEmbedder(args.vault)
-        vault.sync()
-        vault.start_monitoring(interval=5)
-        agent.knowledge = vault.kb
-        agent.cli_app()
+        # vault = VaultEmbedder(args.vault)
+        # vault.sync()
+        # vault.start_monitoring(interval=5)
+        # agent.knowledge = vault.kb
+        obsidian_workflow.main_agent.cli_app(args.query)
     elif args.search:
         if args.search.startswith("tag:#"):
             tag = args.search.replace("tag:#", "")
