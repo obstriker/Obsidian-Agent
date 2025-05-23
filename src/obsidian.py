@@ -4,14 +4,14 @@ from dotenv import load_dotenv
 from datetime import date
 
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
-from agno.memory.memory import Memory
-from agno.storage.agent.sqlite import SqliteAgentStorage
-from agno.memory.db.sqlite import SqliteMemoryDb
-import re
-import glob
-import json
-import datetime
+# from agno.models.openai import OpenAIChat
+# from agno.memory.memory import Memory
+# from agno.storage.agent.sqlite import SqliteAgentStorage
+# from agno.memory.db.sqlite import SqliteMemoryDb
+# import re
+# import glob
+# import json
+# import datetime
 import tools
 from tools import note_utils, tag_utils
 from prompts import *
@@ -59,6 +59,18 @@ load_dotenv()
 # memory_db = SqliteMemoryDb(table_name="memory", db_file=memory_db_path)
 # memory = Memory(db=memory_db)
 
+def setup_workflow(vault_path):
+    note_utils.vault_path = vault_path
+    tag_utils.vault_path = vault_path
+    note_utils.daily_path = os.path.join(vault_path, "Daily", "Journal")
+
+    assitant_path = os.path.join(vault_path, ".assistant")
+    if not os.path.exists(assitant_path):
+        os.makedirs(assitant_path)
+
+    # === Initialize Workflow ===
+    obsidian_workflow = ObsidianWorkflow(vault_path)
+    return obsidian_workflow
 
 
 # === CLI Entrypoint ===
@@ -71,32 +83,20 @@ def main():
 
     if args.vault:
         vault_path = os.path.expanduser(args.vault)
-        note_utils.vault_path = vault_path
-        tag_utils.vault_path = vault_path
-        note_utils.daily_path = os.path.join(vault_path, "Daily", "Journal")
+    else:
+        print("❌ Vault path is required. Please provide --vault argument.")
+        return
 
     if not os.path.isdir(vault_path):
         print(f"❌ Vault path '{vault_path}' does not exist.")
         return
-
-    assitant_path = os.path.join(vault_path, ".assistant")
-    if not os.path.exists(assitant_path):
-        os.makedirs(assitant_path)
 
     # === Initialize Workflow ===
     obsidian_workflow = ObsidianWorkflow(vault_path)
 
     # === Run Agent ===
     if args.query:
-        vault = VaultEmbedder(args.vault)
-        vault.sync()
-        vault.start_monitoring(interval=1800)
-        agent.knowledge = vault.kb
-        # result = agent.print_response(args.query)
-        # vault = VaultEmbedder(args.vault)
-        # vault.sync()
-        # vault.start_monitoring(interval=5)
-        # agent.knowledge = vault.kb
+        obsidian_workflow.sync_vault()
         obsidian_workflow.main_agent.cli_app(args.query)
     elif args.search:
         if args.search.startswith("tag:#"):

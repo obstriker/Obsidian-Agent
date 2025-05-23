@@ -14,6 +14,7 @@ from agno.memory.memory import Memory
 from agno.storage.agent.sqlite import SqliteAgentStorage
 from agno.memory.db.sqlite import SqliteMemoryDb
 from prompts import TaggingAgent
+from vault_embedder import VaultEmbedder
 
 load_dotenv()
 logging.basicConfig(level=logging.WARNING)
@@ -93,6 +94,15 @@ class ObsidianWorkflow(Workflow):
 
     def __init__(self, vault_path=None):
         self.vault_path = vault_path
+
+        note_utils.vault_path = vault_path
+        tag_utils.vault_path = vault_path
+        note_utils.daily_path = os.path.join(vault_path, "Daily", "Journal")
+
+        assitant_path = os.path.join(vault_path, ".assistant")
+        if not os.path.exists(assitant_path):
+            os.makedirs(assitant_path)
+
         # db_path = os.path.join(vault_path, ".assistant", "agent_storage.db")
         # memory_db = SqliteMemoryDb(table_name="memory", db_file=db_path)
         # self.memory = Memory(memory=db_path)
@@ -108,6 +118,16 @@ class ObsidianWorkflow(Workflow):
         if os.path.exists(vault_overview_path):
             self.vault_overview = open(vault_overview_path, "r", encoding="utf-8").read()
             self.overviewed = True
+
+        self.vault = VaultEmbedder(vault_path)
+        self.vault.sync()
+        self.vault.start_monitoring(interval=1800)
+        self.main_agent.knowledge = self.vault.kb
+
+    def sync_vault(self):
+        self.vault.sync()
+        self.vault.start_monitoring(interval=1800)
+        self.main_agent.knowledge = self.vault.kb
 
     def run(self, query: str) -> RunResponse:
         vault_overview_path = os.path.join(self.vault_path, ".assistant", OVERVIEW_FILENAME)
