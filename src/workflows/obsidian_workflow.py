@@ -150,4 +150,4 @@ class ObsidianWorkflow(Workflow):
         
         # self.main_agent.description = ObsidianAgent.description[0] + "\n" + self.vault_overview
 
-        return RunResponse(content=self.main_agent.cli_app(query))
+        return self.main_agent.run(query).content

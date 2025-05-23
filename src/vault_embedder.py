@@ -16,10 +16,11 @@ import io
 import sys
 
 # Set stdout encoding to utf-8
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+# sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 from dotenv import load_dotenv
 load_dotenv()
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 from agno.document import Document

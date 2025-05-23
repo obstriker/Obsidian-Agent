@@ -1,6 +1,6 @@
 from whatsapp_client.client import WhatsAppWebClient
 from datetime import datetime, timedelta
-from obsidian import agent
+from workflows.obsidian_workflow import ObsidianWorkflow
 from dotenv import load_dotenv
 from os import getenv
 
@@ -9,7 +9,9 @@ load_dotenv()
 # add unregister when stopping
 
 # Create the WhatsApp client
-whatsapp = WhatsAppWebClient(callback_host="http://127.0.0.1:8001", setup_node=False)
+whatsapp = WhatsAppWebClient(setup_node=False, 
+                             node_server_url = getenv("NODE_SERVER_URL", "http://localhost:3000"),
+                             callback_host = getenv("CALLBACK_HOST", "http://localhost:8001"))
 
 def load_model():
     import whisper
@@ -53,8 +55,10 @@ def message_handler(sender, message):
     user_sessions[user_id]['last_active'] = datetime.now()
 
     # Run the agent and send response
-    response = agent.run(user_message, user_id=user_id)
-    whatsapp.send(user_id, response.content)
+    response = agent.run(user_message)
+    whatsapp.send(user_id, response)
+
+agent = ObsidianWorkflow(getenv("VAULT_PATH"))
 
 # Start the bot
 whatsapp.run(quiet=False, callback=message_handler, voice_callback=voice_message_callback, groupname="Obsidian")
