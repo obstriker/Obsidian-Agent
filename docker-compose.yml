@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  whatsapp-service:
+    build:
+      context: /WhatsappWebPy
+    container_name: whatsapp-service
+    ports:
+      - "3000:3000"
+    networks:
+      - wa-net
+    restart: always
+
+  obsidian-agent:
+    build:
+      context: .
+    container_name: obsidian-agent
+    environment:
+      NODE_SERVER_URL: http://whatsapp-service:3000
+      CALLBACK_HOST: http://obsidian-agent:8000
+    depends_on:
+      - whatsapp-service
+    networks:
+      - wa-net
+    restart: always
+
+networks:
+  wa-net:
+    external: true

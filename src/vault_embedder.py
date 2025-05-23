@@ -12,6 +12,15 @@ import hashlib
 import json
 import threading
 from typing import List, Optional, Tuple
+import io
+import sys
+
+# Set stdout encoding to utf-8
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+from dotenv import load_dotenv
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 from agno.document import Document
 from agno.knowledge.document import DocumentKnowledgeBase
@@ -23,6 +32,7 @@ INDEX_FILENAME = ".vault_index.json"
 class VaultEmbedder:
     def __init__(self, vault_path: str, vector_db = None, recreate: bool = False):
         self.vault_path = os.path.abspath(vault_path)
+        print(f"Vault path: {self.vault_path}")
         self.db_path = os.path.join(vault_path, ".assistant")
         self.db_path = os.path.join(self.db_path, "lancedb")
         self.index = self._load_index()
@@ -37,7 +47,12 @@ class VaultEmbedder:
 
         self.kb = DocumentKnowledgeBase(documents=[], vector_db=self.vector_db, skip_existing=True)
         self.kb.load(recreate=recreate)
-        self._initial_sync(recreate=recreate)
+        print(f"Knowledge base loaded. Vector DB exists: {self.vector_db.exists()}")
+        try:
+            self._initial_sync(recreate=recreate)
+        except Exception as e:
+            print(f"Error during _initial_sync: {e}")
+            raise
 
     # ----------------- Internal Utilities -----------------
 
@@ -49,10 +64,15 @@ class VaultEmbedder:
 
     def _load_index(self) -> dict:
         path = os.path.join(self.db_path, INDEX_FILENAME)
-        if os.path.exists(path):
-            with open(path) as f:
-                return json.load(f)
-        return {}
+        print(f"Loading index from path: {path}")
+        try:
+            if os.path.exists(path):
+                with open(path) as f:
+                    return json.load(f)
+            return {}
+        except Exception as e:
+            print(f"Error loading index: {e}")
+            raise
 
     def _save_index(self):
         path = os.path.join(self.db_path, INDEX_FILENAME)
@@ -106,18 +126,19 @@ class VaultEmbedder:
         if recreate or not self.index:
             print("📭 No index or recreate=True — syncing full vault.")
             self.index = {}
+        else:
+            print("Using existing index.")
         self.sync()
 
     def query(self, query: str, top_k: int = 5):
-        results = self.kb.query(query=query, top_k=top_k)
-        return [
-            (
-                r.document.name,
-                round(r.score, 4),
-                r.document.content[:300].replace("\n", " ") + "..." if len(r.document.content) > 300 else r.document.content
-            )
-            for r in results
-        ]
+        print(f"Querying with query: {query} and top_k: {top_k}")
+        try:
+            results = self.kb.search(query=query, num_documents=top_k)
+            return results
+            
+        except Exception as e:
+            print(f"Error searching for documents: {e}")
+            raise
 
     def search_knowledge(self, query: str, top_k: int = 5):
         """Agno-style alias."""
@@ -134,3 +155,15 @@ class VaultEmbedder:
         thread = threading.Thread(target=loop, daemon=True)
         thread.start()
         return thread
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Query Obsidian vault")
+    parser.add_argument("--vault", required=True, help="Path to Obsidian vault")
+    parser.add_argument("--query", required=True, help="Query string")
+    args = parser.parse_args()
+
+    ve = VaultEmbedder(vault_path=args.vault)
+    results = ve.query(args.query)
+    for result in results:
+        print(f"Document: {result.meta_data}")

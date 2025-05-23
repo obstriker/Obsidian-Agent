@@ -9,7 +9,7 @@ load_dotenv()
 # add unregister when stopping
 
 # Create the WhatsApp client
-whatsapp = WhatsAppWebClient(callback_host="http://localhost:8001")
+whatsapp = WhatsAppWebClient(callback_host="http://127.0.0.1:8001", setup_node=False)
 
 def load_model():
     import whisper
@@ -53,7 +53,7 @@ def message_handler(sender, message):
     user_sessions[user_id]['last_active'] = datetime.now()
 
     # Run the agent and send response
-    response = agent.run(user_message, user_id=user_id, keep_node_running=True)
+    response = agent.run(user_message, user_id=user_id)
     whatsapp.send(user_id, response.content)
 
 # Start the bot
