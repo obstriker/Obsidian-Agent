@@ -47,7 +47,6 @@ class GitAutoSync:
             origin = self.repo.remotes.origin
 
             logging.info("Pulling latest changes...")
-            logging.info("Pulling latest changes...")
             try:
                 origin.pull(self.branch)
                 logging.info("Pull successful.")
@@ -55,7 +54,6 @@ class GitAutoSync:
                 logging.error(f"Error during pull: {e}")
 
             if self.repo.is_dirty(untracked_files=True):
-                logging.info("Changes detected. Committing...")
                 logging.info("Changes detected. Committing...")
                 try:
                     self.repo.git.add(A=True)
