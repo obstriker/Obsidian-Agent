@@ -15,6 +15,7 @@ from agno.storage.agent.sqlite import SqliteAgentStorage
 from agno.memory.db.sqlite import SqliteMemoryDb
 from prompts import TaggingAgent
 from tools.vault_embedder import VaultEmbedder
+from tools.git_auto_sync import GitAutoSync
 
 load_dotenv()
 logging.basicConfig(level=logging.WARNING)
@@ -114,6 +115,8 @@ class ObsidianWorkflow(Workflow):
         self.vault_overview_agent.memory = self.memory
         self.tagging_agent.memory = self.memory
 
+
+        self.git = GitAutoSync(vault_path)
         # Move to obsidian file, this will handle all the tools setup, 
         # workflows, etc.
 
@@ -141,6 +144,8 @@ class ObsidianWorkflow(Workflow):
             logging.error("Query is empty or contains only whitespace.")
             return RunResponse(content="Error: Query cannot be empty.")
 
+        self.git.sync()
+
         if not self.overviewed:
             logging.info("Vault overview file does not exist, creating a new one.")
             overview = self.vault_overview_agent.run("Create an overview for the vault.").content
@@ -153,4 +158,7 @@ class ObsidianWorkflow(Workflow):
         
         # self.main_agent.description = ObsidianAgent.description[0] + "\n" + self.vault_overview
 
-        return self.main_agent.run(query).content
+        res = self.main_agent.run(query).content
+        self.git.sync()
+
+        return res
