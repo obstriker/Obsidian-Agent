@@ -1,6 +1,6 @@
 from whatsapp_client.client import WhatsAppWebClient
 from datetime import datetime, timedelta
-from workflows.obsidian_workflow import ObsidianWorkflow
+from obsidian import create_agent
 from dotenv import load_dotenv
 from os import getenv
 
@@ -58,7 +58,7 @@ def message_handler(sender, message):
     response = agent.run(user_message)
     whatsapp.send(user_id, response)
 
-agent = ObsidianWorkflow(getenv("VAULT_PATH"))
+agent = create_agent(getenv("VAULT_PATH"))
 
 # Start the bot
 whatsapp.run(quiet=False, callback=message_handler, voice_callback=voice_message_callback, groupname="Obsidian")

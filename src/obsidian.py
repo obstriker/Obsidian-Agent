@@ -140,7 +140,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-def signal_handler(sig, frame):
-    print("Exiting gracefully...")
-    sys.exit(0)
