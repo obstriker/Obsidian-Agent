@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from datetime import date
 
 from agno.agent import Agent
+from tools.git_auto_sync import GitAutoSync
 # from agno.models.openai import OpenAIChat
 # from agno.memory.memory import Memory
 # from agno.storage.agent.sqlite import SqliteAgentStorage
@@ -12,12 +13,12 @@ from agno.agent import Agent
 # import glob
 # import json
 # import datetime
-import tools
-from tools import note_utils, tag_utils
+import tools.tools as tools
+from tools.tools import note_utils, tag_utils
 from prompts import *
 from workflows.obsidian_workflow import ObsidianWorkflow
 # from watchdog.vault_watcher import start_vault_sync_thread, init_knowledge_base
-from vault_embedder import *
+from tools.vault_embedder import *
 # from watchdog.vault_watcher import *
 
 ## Improve tools 
@@ -59,6 +60,12 @@ load_dotenv()
 # memory_db = SqliteMemoryDb(table_name="memory", db_file=memory_db_path)
 # memory = Memory(db=memory_db)
 
+# setup workflow, run agent, setup tools, run threads, 
+
+# Create class to orchestrate multiple workflows and export one agent for wwbot?
+
+import threading
+
 def setup_workflow(vault_path):
     note_utils.vault_path = vault_path
     tag_utils.vault_path = vault_path
@@ -69,8 +76,23 @@ def setup_workflow(vault_path):
         os.makedirs(assitant_path)
 
     # === Initialize Workflow ===
+    print("Starting vault syncing...")
     obsidian_workflow = ObsidianWorkflow(vault_path)
+    obsidian_workflow.sync_vault()
+
+    # Git syncing
+    print("Starting git syncing...")
+    git = GitAutoSync(vault_path)
+    git_thread = threading.Thread(target=git.run)
+    print("Starting Git sync thread...")
+    git_thread.start()
+    print("Git sync thread started.")
+
     return obsidian_workflow
+
+def create_agent(vault_path):
+    obsidian_workflow = setup_workflow(vault_path)
+    return obsidian_workflow.main_agent
 
 
 # === CLI Entrypoint ===
@@ -92,12 +114,13 @@ def main():
         return
 
     # === Initialize Workflow ===
-    obsidian_workflow = ObsidianWorkflow(vault_path)
+    obsidian_workflow = setup_workflow(vault_path)
 
     # === Run Agent ===
     if args.query:
         obsidian_workflow.sync_vault()
-        obsidian_workflow.main_agent.cli_app(args.query)
+
+        # obsidian_workflow.main_agent.cli_app(args.query)
     elif args.search:
         if args.search.startswith("tag:#"):
             tag = args.search.replace("tag:#", "")
@@ -108,9 +131,16 @@ def main():
         else:
             result = obsidian_workflow.run(f"Search inside notes for '{args.search}'")
     else:
-        result = "Please provide --query, --search"
+        result = "Please provide a query or search argument"
     print("\n🤖 Agent Response:\n")
-    print(result.content)
+    if 'result' in locals():
+        print(result.content)
+    else:
+        print("No result to display.")
 
 if __name__ == "__main__":
     main()
+
+def signal_handler(sig, frame):
+    print("Exiting gracefully...")
+    sys.exit(0)

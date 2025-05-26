@@ -7,14 +7,14 @@ import os
 from prompts import *
 from agno.models.openai import OpenAIChat
 from agno.storage.agent.sqlite import SqliteAgentStorage
-from tools import *
+from tools.tools import *
 from prompts import *
 from dotenv import load_dotenv
 from agno.memory.memory import Memory
 from agno.storage.agent.sqlite import SqliteAgentStorage
 from agno.memory.db.sqlite import SqliteMemoryDb
 from prompts import TaggingAgent
-from vault_embedder import VaultEmbedder
+from tools.vault_embedder import VaultEmbedder
 
 load_dotenv()
 logging.basicConfig(level=logging.WARNING)
@@ -113,6 +113,9 @@ class ObsidianWorkflow(Workflow):
         self.main_agent.memory = self.memory
         self.vault_overview_agent.memory = self.memory
         self.tagging_agent.memory = self.memory
+
+        # Move to obsidian file, this will handle all the tools setup, 
+        # workflows, etc.
 
         vault_overview_path = os.path.join(vault_path, ".assistant", OVERVIEW_FILENAME)
         if os.path.exists(vault_overview_path):
