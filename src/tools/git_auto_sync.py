@@ -78,11 +78,14 @@ class GitAutoSync:
         """
         Continuously sync the repository every `self.interval` seconds.
         """
-        logging.info(f"Starting auto-sync every {interval} seconds...")
+        if interval:
+            self.interval = interval
+
+        logging.info(f"Starting auto-sync every {self.interval} seconds...")
         while True:
             logging.info(f"Sync cycle started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             self.sync()
-            time.sleep(interval)
+            time.sleep(self.interval)
 
 
 # g = GitAutoSync(repo_path="..\..\Vaults\Obsidian-DB", branch="main", interval=3)

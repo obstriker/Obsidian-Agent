@@ -11,7 +11,7 @@ class note_utils:
     daily_path = None
     @staticmethod
     def create_note(note_name: str, content: str) -> str:
-        path = os.path.join(note_utils.vault_path, f"{note_name}.md")
+        path = os.path.join(note_utils.vault_path, f"{note_name}")
         if os.path.exists(path):
             return f"Note '{note_name}' already exists."
 
@@ -24,7 +24,7 @@ class note_utils:
 
     @staticmethod
     def append_to_note(note_name: str, content: str, marker: str = "<!-- AI -->") -> str:
-        path = os.path.join(note_utils.vault_path, f"{note_name}.md")
+        path = os.path.join(note_utils.vault_path, f"{note_name}")
         if not os.path.exists(path):
             return f"Note '{note_name}' not found."
         with open(path, "r+", encoding="utf-8") as f:

@@ -92,7 +92,7 @@ def setup_workflow(vault_path):
 
 def create_agent(vault_path):
     obsidian_workflow = setup_workflow(vault_path)
-    return obsidian_workflow.main_agent
+    return obsidian_workflow
 
 
 # === CLI Entrypoint ===
