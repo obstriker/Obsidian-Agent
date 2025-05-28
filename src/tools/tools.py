@@ -5,6 +5,9 @@ import glob
 import re
 from datetime import date
 import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 VAULT_PATH = os.getenv("VAULT_PATH")
 
@@ -45,6 +48,7 @@ class note_utils:
     @staticmethod
     def search_note_file(query: str) -> str:
         matches = []
+
         for root, dirs, files in os.walk(note_utils.vault_path):
             for f in files:
                 if query.lower() in f.lower() and f.endswith(".md"):
@@ -159,19 +163,19 @@ def _save_tags_to_json(file_path: str, tags: set):
 class tag_utils:
     vault_path = VAULT_PATH
     daily_path = os.path.join(VAULT_PATH, "Daily", "Journal")
-    
-    def get_vault_tags(vault_path: str) -> set:
+
+    def get_vault_tags() -> set:
         """
         Scans all files in the Obsidian vault and extracts all the tags.
         The tool should output a list of unique tags.
         Saves all tags to .json and uses it when it exists.
         """
-        tags_file = os.path.join(vault_path, "tags.json")
+        tags_file = os.path.join(VAULT_PATH, ".assistant", "tags.json")
         unique_tags = _load_tags_from_json(tags_file)
 
         if unique_tags is None:
             unique_tags = set()
-            for root, _, files in os.walk(vault_path):
+            for root, _, files in os.walk(note_utils.vault_path):
                 for file in files:
                     if file.endswith(".md"):
                         file_path = os.path.join(root, file)
@@ -184,4 +188,4 @@ class tag_utils:
                             print(f"Error reading file {file_path}: {e}")
             _save_tags_to_json(tags_file, unique_tags)
 
-        return unique_tags
+        return str(unique_tags)

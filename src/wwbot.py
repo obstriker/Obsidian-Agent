@@ -38,8 +38,8 @@ def message_handler(sender, message):
 
     # Handle "/clear" command
     if user_message == "/clear":
-        agent.storage.delete_session(user_id)
-        user_sessions.pop(user_id, None)
+        #agent.storage.delete_session(user_id)
+        #user_sessions.pop(user_id, None)
         whatsapp.send(user_id, "Your session has been cleared.")
         return
 
@@ -47,7 +47,7 @@ def message_handler(sender, message):
     if user_id in user_sessions:
         last_active = user_sessions[user_id]['last_active']
         if datetime.now() - last_active > SESSION_TIMEOUT:
-            agent.storage.delete_session(user_id)
+            #agent.storage.delete_session(user_id)
             user_sessions[user_id] = {'last_active': datetime.now()}
     else:
         user_sessions[user_id] = {'last_active': datetime.now()}

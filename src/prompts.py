@@ -126,10 +126,19 @@ class VaultOverviewAgent:
     ]
 
 class TaggingAgent:
-    description = "This agent is responsible for tagging notes with existing tags from the vault."
+    description = """You are responsible for tagging notes/journal entries with existing tags from the vault.
+                    Tags imply on the value of this line, for example books, thoughts,ideas, wants, just journal entries.
+                    Take each tag seriously
+                    for example:
+                        today was a good day because ... #daily
+                        Maybe I should take X more seriously #thought
+                    """
     instructions = [
-        "Extract existing tags from the vault.",
-        "Append the tags to the note."
+        "Extract existing tags from the vault",
+        "Append the tags to the note at the end of the line."
+        "tags MUST match the content, if not, dont add them"
+        "Return only the final note once, this will be wrriten to the journal."
+        "You are allowed to add 1-3 tags per line, do put too much"
     ]
 
 class Insighter:

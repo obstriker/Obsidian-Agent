@@ -17,7 +17,7 @@ from tools.git_auto_sync import GitAutoSync
 import tools.tools as tools
 from tools.tools import note_utils, tag_utils
 from prompts import *
-from workflows.obsidian_workflow import ObsidianWorkflow
+from workflows.dump import ObsidianWorkflow
 # from watchdog.vault_watcher import start_vault_sync_thread, init_knowledge_base
 from tools.vault_embedder import *
 # from watchdog.vault_watcher import *
@@ -135,7 +135,7 @@ def main():
     else:
         print("No result to display.")
 
-app = Playground(workflows=[create_agent("../../vaults/Obsidian-DB/")]).get_app()
+app = Playground(agents = [ObsidianWorkflow.tagging_agent], workflows=[create_agent("../../vaults/Obsidian-DB/")]).get_app()
 
 if __name__ == "__main__":
     serve_playground_app("obsidian:app", reload=True)
