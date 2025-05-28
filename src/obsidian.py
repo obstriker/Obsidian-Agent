@@ -3,6 +3,7 @@ import argparse
 from dotenv import load_dotenv
 from datetime import date
 
+from agno.playground import Playground, serve_playground_app
 from agno.agent import Agent
 from tools.git_auto_sync import GitAutoSync
 # from agno.models.openai import OpenAIChat
@@ -67,17 +68,13 @@ load_dotenv()
 import threading
 
 def setup_workflow(vault_path):
-    note_utils.vault_path = vault_path
-    tag_utils.vault_path = vault_path
-    note_utils.daily_path = os.path.join(vault_path, "Daily", "Journal")
-
     assitant_path = os.path.join(vault_path, ".assistant")
     if not os.path.exists(assitant_path):
         os.makedirs(assitant_path)
 
     # === Initialize Workflow ===
     print("Starting vault syncing...")
-    obsidian_workflow = ObsidianWorkflow(vault_path)
+    obsidian_workflow = ObsidianWorkflow(vault_path, workflow_id="testagent")
     obsidian_workflow.sync_vault()
 
     # Git syncing
@@ -138,5 +135,7 @@ def main():
     else:
         print("No result to display.")
 
+app = Playground(workflows=[create_agent("../../vaults/Obsidian-DB/")]).get_app()
+
 if __name__ == "__main__":
-    main()
+    serve_playground_app("obsidian:app", reload=True)
