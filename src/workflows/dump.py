@@ -22,13 +22,16 @@ logging.basicConfig(level=logging.WARNING)
 
 OVERVIEW_FILENAME = "overview.md"
 
+# remove setup workflow as much as possible
+# deconstruct agents to simple as possible (i dont want to see init stuff and hacky fixations like memory and obsidian path, vault sync etc..)
+
 class ObsidianWorkflow(Workflow):
     name = "Obsidian Workflow"
     description = "Orchestrates the main agent and tagging agent to create and tag notes."
     overviewed = False
 
     vault_overview_agent: Agent = Agent(
-        model=OpenAIChat(id="gpt-4.1"),
+        model=OpenAIChat(id="gpt-4.1-mini"),
         # memory=memory,
         storage=SqliteAgentStorage(table_name="vault_overview_agent_sessions", db_file="vault_overview_agent_storage.db"),
         add_history_to_messages=True,  # Adds recent chat history when generating a reply
@@ -76,7 +79,7 @@ class ObsidianWorkflow(Workflow):
 )
 
     tagging_agent: Agent = Agent(
-        model=OpenAIChat(id="gpt-4.1"),
+        model=OpenAIChat(id="gpt-4.1-mini"),
         storage=SqliteAgentStorage(table_name="tagging_agent_sessions", db_file="tagging_agent_storage.db"),
         add_history_to_messages=True,
         num_history_responses=3,
@@ -93,23 +96,22 @@ class ObsidianWorkflow(Workflow):
         instructions = TaggingAgent.instructions
     )
 
-    def __init__(self, vault_path=None):
+    def __init__(self, vault_path=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)  # Call to the superclass constructor
         self.vault_path = vault_path
-
-        note_utils.vault_path = vault_path
-        tag_utils.vault_path = vault_path
-        note_utils.daily_path = os.path.join(vault_path, "Daily", "Journal")
 
         assitant_path = os.path.join(vault_path, ".assistant")
         if not os.path.exists(assitant_path):
             os.makedirs(assitant_path)
 
+
+        # TODO: Remove and offload to the agent definition.
+            # Use the sqlitedb
         # db_path = os.path.join(vault_path, ".assistant", "agent_storage.db")
         # memory_db = SqliteMemoryDb(table_name="memory", db_file=db_path)
         # self.memory = Memory(memory=db_path)
         from agno.memory import AgentMemory
         self.memory = AgentMemory()
-
 
         self.main_agent.memory = self.memory
         self.vault_overview_agent.memory = self.memory
