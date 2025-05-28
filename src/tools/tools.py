@@ -1,14 +1,18 @@
 import os
+from os import getenv
 import json
 import glob
 import re
 from datetime import date
 import datetime
 
+VAULT_PATH = os.getenv("VAULT_PATH")
 
+# TODO: all configurations including obsidian path should be configured in .env
 class note_utils:
-    vault_path = None
-    daily_path = None
+    vault_path = VAULT_PATH
+    daily_path = os.path.join(VAULT_PATH, "Daily", "Journal")
+
     @staticmethod
     def create_note(note_name: str, content: str) -> str:
         path = os.path.join(note_utils.vault_path, f"{note_name}")
@@ -153,8 +157,9 @@ def _save_tags_to_json(file_path: str, tags: set):
 
 
 class tag_utils:
-    vault_path = None
-    daily_path = None
+    vault_path = VAULT_PATH
+    daily_path = os.path.join(VAULT_PATH, "Daily", "Journal")
+    
     def get_vault_tags(vault_path: str) -> set:
         """
         Scans all files in the Obsidian vault and extracts all the tags.
